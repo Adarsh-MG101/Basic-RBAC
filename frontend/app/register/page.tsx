@@ -17,7 +17,7 @@ export default function Register() {
             const res = await api.post('/auth/register', { email, password });
             setToken(res.data.token);
             localStorage.setItem('role', res.data.role);
-            router.push('/');
+            router.push('/login');
         } catch (err: any) {
             setError(err.response?.data?.msg || 'Registration failed');
         }
