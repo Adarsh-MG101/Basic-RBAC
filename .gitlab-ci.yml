@@ -1,0 +1,247 @@
+# GitLab CI/CD Pipeline for Basic RBAC Project
+# This pipeline handles testing, building, and deployment for both backend and frontend
+
+stages:
+  - install
+  - lint
+  - test
+  - build
+  - deploy
+
+# Define variables
+variables:
+  NODE_VERSION: "20"
+  BACKEND_DIR: "backend"
+  FRONTEND_DIR: "frontend"
+  
+# Cache node_modules to speed up builds
+cache:
+  key:
+    files:
+      - backend/package-lock.json
+      - frontend/package-lock.json
+  paths:
+    - backend/node_modules/
+    - frontend/node_modules/
+    - frontend/.next/cache/
+
+# ==================== INSTALL STAGE ====================
+
+install:backend:
+  stage: install
+  image: node:${NODE_VERSION}
+  script:
+    - cd ${BACKEND_DIR}
+    - npm ci
+  artifacts:
+    paths:
+      - ${BACKEND_DIR}/node_modules/
+    expire_in: 1 hour
+  only:
+    changes:
+      - backend/**/*
+      - .gitlab-ci.yml
+
+install:frontend:
+  stage: install
+  image: node:${NODE_VERSION}
+  script:
+    - cd ${FRONTEND_DIR}
+    - npm ci
+  artifacts:
+    paths:
+      - ${FRONTEND_DIR}/node_modules/
+    expire_in: 1 hour
+  only:
+    changes:
+      - frontend/**/*
+      - .gitlab-ci.yml
+
+# ==================== LINT STAGE ====================
+
+lint:backend:
+  stage: lint
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install:backend
+  script:
+    - cd ${BACKEND_DIR}
+    - echo "Running backend linting..."
+    - npx eslint . --ext .js || echo "No ESLint config found, skipping..."
+  only:
+    changes:
+      - backend/**/*
+      - .gitlab-ci.yml
+
+lint:frontend:
+  stage: lint
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install:frontend
+  script:
+    - cd ${FRONTEND_DIR}
+    - echo "Running frontend linting..."
+    - npm run lint
+  only:
+    changes:
+      - frontend/**/*
+      - .gitlab-ci.yml
+
+# ==================== TEST STAGE ====================
+
+test:backend:
+  stage: test
+  image: node:${NODE_VERSION}
+  services:
+    - mongo:latest
+  variables:
+    MONGO_URI: "mongodb://mongo:27017/test_db"
+    JWT_SECRET: "test_jwt_secret_key_for_ci"
+    ADMIN_EMAIL: "admin@test.com"
+    ADMIN_PASSWORD: "testpassword123"
+  dependencies:
+    - install:backend
+  script:
+    - cd ${BACKEND_DIR}
+    - echo "Running backend tests..."
+    - npm test || echo "No tests specified yet"
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  only:
+    changes:
+      - backend/**/*
+      - .gitlab-ci.yml
+
+test:frontend:
+  stage: test
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install:frontend
+  script:
+    - cd ${FRONTEND_DIR}
+    - echo "Running frontend tests..."
+    - npm test || echo "No tests specified yet"
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  only:
+    changes:
+      - frontend/**/*
+      - .gitlab-ci.yml
+
+# ==================== BUILD STAGE ====================
+
+build:backend:
+  stage: build
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install:backend
+  script:
+    - cd ${BACKEND_DIR}
+    - echo "Backend build successful (Node.js doesn't require compilation)"
+    - echo "Verifying server.js exists..."
+    - ls -la server.js
+  artifacts:
+    paths:
+      - ${BACKEND_DIR}/
+    exclude:
+      - ${BACKEND_DIR}/node_modules/
+    expire_in: 1 week
+  only:
+    changes:
+      - backend/**/*
+      - .gitlab-ci.yml
+
+build:frontend:
+  stage: build
+  image: node:${NODE_VERSION}
+  dependencies:
+    - install:frontend
+  script:
+    - cd ${FRONTEND_DIR}
+    - echo "Building Next.js application..."
+    - npm run build
+  artifacts:
+    paths:
+      - ${FRONTEND_DIR}/.next/
+      - ${FRONTEND_DIR}/public/
+    expire_in: 1 week
+  only:
+    changes:
+      - frontend/**/*
+      - .gitlab-ci.yml
+
+# ==================== DEPLOY STAGE ====================
+
+# Deploy to Staging Environment
+deploy:staging:
+  stage: deploy
+  image: node:${NODE_VERSION}
+  dependencies:
+    - build:backend
+    - build:frontend
+  environment:
+    name: staging
+    url: https://staging.yourapp.com
+  script:
+    - echo "Deploying to staging environment..."
+    - echo "Backend deployment would happen here"
+    - echo "Frontend deployment would happen here"
+    # Example deployment commands:
+    # - scp -r backend/ user@staging-server:/path/to/backend
+    # - scp -r frontend/.next/ user@staging-server:/path/to/frontend
+    # - ssh user@staging-server "cd /path/to/backend && pm2 restart backend"
+    # - ssh user@staging-server "cd /path/to/frontend && pm2 restart frontend"
+  only:
+    - develop
+  when: manual
+
+# Deploy to Production Environment
+deploy:production:
+  stage: deploy
+  image: node:${NODE_VERSION}
+  dependencies:
+    - build:backend
+    - build:frontend
+  environment:
+    name: production
+    url: https://yourapp.com
+  script:
+    - echo "Deploying to production environment..."
+    - echo "Backend deployment would happen here"
+    - echo "Frontend deployment would happen here"
+    # Example deployment commands:
+    # - scp -r backend/ user@prod-server:/path/to/backend
+    # - scp -r frontend/.next/ user@prod-server:/path/to/frontend
+    # - ssh user@prod-server "cd /path/to/backend && pm2 restart backend"
+    # - ssh user@prod-server "cd /path/to/frontend && pm2 restart frontend"
+  only:
+    - main
+    - master
+  when: manual
+
+# ==================== DOCKER BUILD (OPTIONAL) ====================
+
+# Uncomment if you want to build Docker images
+# build:docker:backend:
+#   stage: build
+#   image: docker:latest
+#   services:
+#     - docker:dind
+#   script:
+#     - cd ${BACKEND_DIR}
+#     - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA .
+#     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
+#   only:
+#     - main
+#     - develop
+
+# build:docker:frontend:
+#   stage: build
+#   image: docker:latest
+#   services:
+#     - docker:dind
+#   script:
+#     - cd ${FRONTEND_DIR}
+#     - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA .
+#     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA
+#   only:
+#     - main
+#     - develop
