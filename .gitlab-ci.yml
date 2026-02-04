@@ -47,7 +47,7 @@ install:frontend:
   image: node:${NODE_VERSION}
   script:
     - cd ${FRONTEND_DIR}
-    - npm ci
+    - npm install --legacy-peer-deps
   artifacts:
     paths:
       - ${FRONTEND_DIR}/node_modules/
