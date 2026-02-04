@@ -18,12 +18,13 @@ The pipeline is designed to automatically test, build, and deploy both the **bac
 
 **Jobs:**
 - `install:backend` - Installs backend dependencies using `npm ci`
-- `install:frontend` - Installs frontend dependencies using `npm ci`
+- `install:frontend` - Installs frontend dependencies using `npm install --legacy-peer-deps` (for React 19 compatibility)
 
 **Features:**
 - Only runs when files in respective directories change
 - Caches `node_modules` for faster subsequent builds
 - Artifacts are passed to subsequent stages
+- Frontend uses `--legacy-peer-deps` to handle React 19 peer dependency conflicts
 
 ### 2. Lint Stage
 
